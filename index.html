@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="description" content="在庫状況を表示するページ" />
+    <meta name="keywords" content="在庫, 商品, ストック" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>在庫状況</title>
+    <style>
+        #loading {
+            font-size: 1.5rem;
+            text-align: center;
+            margin-top: 20px;
+        }
+        table {
+            font-family: Arial, sans-serif;
+            border: 0;
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 800px;
+            margin: auto;
+        }
+        th, td {
+            border-top: 0.5px solid black;
+            border-bottom: 0.5px solid black;
+            height: 60px;
+            text-align: center;
+        }
+        th {
+            background-color: #ddd;
+        }
+        .stock-cell {
+            font-size: 1.5rem;
+            transition: background-color 0.5s ease, color 0.5s ease;
+            font-weight: bold;
+        }
+        .sold-out {
+            background-color: #ffcccc;
+            color: black;
+        }
+        .low-stock {
+            background-color: #ffffcc;
+            color: black;
+        }
+        .available {
+            background-color: #ccddff;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">更新中...</div>
+    <table class="custom-bordered" style="display:none"></table>
+
+    <script>
+        // ローディングメッセージとテーブルの要素を取得
+        const loadingDiv = document.getElementById('loading');
+        const table = document.querySelector('table');
+
+        // 初回ロードフラグ
+        let isFirstLoad = true;
+
+        // 在庫状況のクラス名を返す関数
+        function getStockClass(stockStatus) {
+            if (stockStatus === "✕") return 'sold-out';
+            if (stockStatus === "△") return 'low-stock';
+            if (stockStatus === "◎") return 'available';
+            return '';
+        }
+
+        // 初回はテーブルの行を全部作る
+        function buildTable(stockData) {
+            table.innerHTML = '';
+
+            // ヘッダー作成
+            const headerRow = document.createElement('tr');
+            ['商品名', '在庫状況', '販売場所'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+            table.appendChild(headerRow);
+
+            // データ行作成
+            stockData.forEach(entry => {
+                const row = document.createElement('tr');
+
+                const productCell = document.createElement('td');
+                productCell.textContent = entry["商品名"];
+                row.appendChild(productCell);
+
+                const stockCell = document.createElement('td');
+                stockCell.textContent = entry["在庫状況"];
+                stockCell.classList.add('stock-cell');
+                stockCell.classList.add(getStockClass(entry["在庫状況"]));
+                row.appendChild(stockCell);
+
+                const locationCell = document.createElement('td');
+                locationCell.textContent = entry["販売場所"];
+                row.appendChild(locationCell);
+
+                table.appendChild(row);
+            });
+        }
+
+        // 2回目以降は在庫状況セルだけを更新する
+        function updateStockStatus(stockData) {
+            // ヘッダー行は1行目なのでデータは2行目以降
+            for (let i = 0; i < stockData.length; i++) {
+                const stockStatus = stockData[i]["在庫状況"];
+                // テーブルの該当行の2列目(td)が在庫状況セル
+                const stockCell = table.rows[i+1].cells[1];
+                // テキスト更新
+                stockCell.textContent = stockStatus;
+                // クラスを更新
+                stockCell.className = 'stock-cell ' + getStockClass(stockStatus);
+            }
+        }
+
+        // GASのWebアプリURL（例）
+        const url_gas = "https://script.google.com/macros/s/AKfycbygIV_uGiIGTYpnS3kLwtitbGnHUNQsA6vf2Pe-LAdEhMyRLMs3N-lkhY9-Tna5zywm/exec";
+
+        function fetchData() {
+            fetch(url_gas)
+            .then(response => response.json())
+            .then(json => {
+                const stockData = json.data;
+                if (isFirstLoad) {
+                    buildTable(stockData);
+                    loadingDiv.style.display = 'none';
+                    table.style.display = 'table';
+                    isFirstLoad = false;
+                } else {
+                    updateStockStatus(stockData);
+                }
+            })
+            .catch(err => console.error(err));
+        }
+        // 初回ロード時にデータを取得
+        fetchData();
+
+        // アクティブ時のみ更新
+        let intervalId;
+        function startFetching() {
+            if (!intervalId) {
+                fetchData(); // 最初に即時取得
+                intervalId = setInterval(fetchData, 10000);
+            }
+        }
+        function stopFetching() {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+        }
+        // visibilitychangeイベントの監視
+        document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            // タブがアクティブなら更新開始
+            startFetching();
+        } else {
+            // タブが非アクティブなら更新停止
+            stopFetching();
+        }
+        });
+
+        // ページ読み込み時に状態をチェックして開始
+        if (document.visibilityState === 'visible') {
+        startFetching();
+        }
+        // ページが閉じられるときに更新停止
+        window.addEventListener('beforeunload', stopFetching);
+    </script>
+</body>
+</html>
